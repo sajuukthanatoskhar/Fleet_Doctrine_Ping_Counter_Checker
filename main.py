@@ -1,7 +1,10 @@
+import datetime
 import sys, json
+import discord_msg
 
 fleet_doctrines = {}
 clean_discord_messages = []
+year_month = []
 
 
 def get_ship_doctrine_name(msg, index, ship_doctrine_descriptor="None") -> str:
@@ -39,17 +42,29 @@ def parse_discord_msg(fleet_doctrine_list: dict, discord_msg: dict, clean_messag
                 clean_discord_messages.append(discord_msg['id'])
                 ship_doctrine_name = get_ship_doctrine_name(discord_msg['content'], discord_msg['content'].find("Ship Doctrine"),
                                        ship_doctrine_descriptor=clean_message_filter)
+                # datetime.datetime.strptime(discord_msg['timestamp'], '%Y-%m-%dT%H:%M:%S.%f%z')
             else:
                 ship_doctrine_name = clean_message_filter
             # Check dict
+            try:
+                discord_msg_timestamp = datetime.datetime.strptime(discord_msg['timestamp'], '%Y-%m-%dT%H:%M:%S.%f%z')
+            except ValueError:
+                discord_msg_timestamp = datetime.datetime.strptime(discord_msg['timestamp'], '%Y-%m-%dT%H:%M:%S%z')
+            timestamp_str = datetime.datetime.strftime(discord_msg_timestamp, '%Y_%m')
             if ship_doctrine_name in fleet_doctrine_list.keys() and (ship_doctrine_name is not "" or ship_doctrine_name is not " "):
-                fleet_doctrine_list[ship_doctrine_name] += 1
+                if timestamp_str not in fleet_doctrine_list[ship_doctrine_name]:
+                    fleet_doctrine_list[ship_doctrine_name][timestamp_str] = 1
+                else:
+                    fleet_doctrine_list[ship_doctrine_name][timestamp_str] += 1
             else:
-                fleet_doctrine_list[ship_doctrine_name] = 1
+                fleet_doctrine_list[ship_doctrine_name] = {}
+                fleet_doctrine_list[ship_doctrine_name][timestamp_str] = 1
+
+            if timestamp_str not in year_month:
+                year_month.append(timestamp_str)
+
         else:
             pass
-
-
     return fleet_doctrine_list
 
 
@@ -60,18 +75,18 @@ if __name__ == '__main__':
     with open(sys.argv[1], 'r') as file_to_be_read:
         asdf = json.load(file_to_be_read)
         for msg in asdf['messages']:
-            parse_discord_msg(fleet_doctrines,
-                              discord_msg=msg)
+            parse_discord_msg(fleet_doctrines, discord_msg=msg)
 
         #For dirty messages
         for msg in asdf['messages']:
             parse_discord_msg(fleet_doctrines, discord_msg=msg,
                               clean_message_descriptor=[*fleet_doctrines.keys()])
-
-    with open('doctrine_list_count.csv','w') as write_file:
-        for k, v in sorted(fleet_doctrines.items()):
-            msg_str = "{} ~ {}\n".format(k, v)
-            print(msg_str)
-            write_file.write(msg_str)
+    for yearmonth_tocheck in year_month:
+        with open('doctrine_list_count_{}.csv'.format(yearmonth_tocheck),'w') as write_file:
+            for k, v in sorted(fleet_doctrines.items()):
+                if yearmonth_tocheck in v.keys():
+                    msg_str = "{} \t {}\n".format(k, v[yearmonth_tocheck])
+                    print(msg_str)
+                    write_file.write(msg_str)
     pass
 
